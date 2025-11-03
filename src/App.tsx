@@ -26,10 +26,10 @@ function App() {
               path="/deletarcategoria/:id"
               element={<DeletarCategoria />}
             />
-            <Route path="/postagens" element={<ListaProdutos />} />
-            <Route path="/cadastrarpostagem" element={<FormProduto />} />
-            <Route path="/editarpostagem/:id" element={<FormProduto />} />
-            <Route path="/deletarpostagem/:id" element={<DeletarProduto />} />
+            <Route path="/produtos" element={<ListaProdutos />} />
+            <Route path="/cadastrarproduto" element={<FormProduto />} />
+            <Route path="/editarproduto/:id" element={<FormProduto />} />
+            <Route path="/deletarproduto/:id" element={<DeletarProduto />} />
           </Routes>
         </div>
         <Footer />

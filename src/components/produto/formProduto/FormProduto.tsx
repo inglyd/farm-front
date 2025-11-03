@@ -9,115 +9,133 @@ import { ToastAlerta } from "../../../assets/utils/ToastAlerta";
 function FormProduto() {
   const navigate = useNavigate();
 
-  const [produto, setProduto] = useState<Produto>({} as Produto);
-
-  const [categorias, setCategorias] = useState<Categoria[]>([]);
-
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [categoria, setCategoria] = useState<Categoria>({
+    id: 0,
+    descricao: "",
+    nome: "",
+  });
+
+  const [produto, setProduto] = useState<Produto>({
+    id: 0,
+    nome: "",
+    descricao: "",
+    preco: 0,
+    foto: "",
+    categoria: null,
+  });
 
   const { id } = useParams<{ id: string }>();
 
-  useEffect(() => {
-    buscarCategorias();
-    if (id !== undefined) {
-      buscarPorId(id);
+  async function buscarProdutoPorId(id: string) {
+    try {
+      await buscar(`/produtos/${id}`, (data: Produto) => {
+        setProduto({
+          ...data,
+          categoria: data.categoria ?? null,
+        });
+        if (data.categoria) setCategoria(data.categoria);
+      });
+    } catch (error: any) {
+      console.error("Erro ao buscar produto por ID:", error);
+      ToastAlerta("Erro ao carregar produto.", "erro");
     }
-  }, [id]);
+  }
 
   async function buscarCategorias() {
     try {
       await buscar("/categorias", setCategorias);
     } catch (error: any) {
+      console.error("Erro ao buscar categorias:", error);
       ToastAlerta("Erro ao carregar categorias.", "erro");
     }
   }
 
-  async function buscarPorId(id: string) {
-    try {
-      await buscar(`/produtos/${id}`, setProduto);
-    } catch (error: any) {
-      ToastAlerta("Erro ao carregar produto.", "erro");
+  useEffect(() => {
+    buscarCategorias();
+    if (id !== undefined) {
+      buscarProdutoPorId(id);
     }
-  }
+  }, [id]);
 
   function atualizarEstado(
-    e: ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) {
     const { name, value } = e.target;
+    setProduto((prev) => ({
+      ...prev,
+      [name]: name === "preco" ? Number(value) : value,
+    }));
+  }
 
-    if (name === "categoria") {
-      // Busca o objeto categoria pelo id selecionado
-      const categoriaSelecionada = categorias.find(
-        (cat) => cat.id === Number(value)
-      );
-      setProduto({
-        ...produto,
-        categoria: categoriaSelecionada || ({} as Categoria),
-      });
-    } else if (name === "preco") {
-      setProduto({
-        ...produto,
-        preco: Number(value),
-      });
+  function handleChangeCategoria(e: ChangeEvent<HTMLSelectElement>) {
+    const value = e.currentTarget.value;
+    const idSelecionado = Number(value);
+    const cat = categorias.find((c) => c.id === idSelecionado);
+    if (cat) {
+      setCategoria(cat);
+      setProduto((prev) => ({ ...prev, categoria: cat }));
     } else {
-      setProduto({
-        ...produto,
-        [name]: value,
-      });
+      setCategoria({ id: 0, descricao: "", nome: "" });
+      setProduto((prev) => ({ ...prev, categoria: null }));
     }
   }
 
-  async function salvarProduto(e: FormEvent<HTMLFormElement>) {
+  function retornar() {
+    navigate("/produtos");
+  }
+
+  async function gerarNovoProduto(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setIsLoading(true);
 
-    if (produto.nome.trim() === "") {
-      ToastAlerta("Preencha o nome do produto.", "erro");
-      setIsLoading(false);
-      return;
-    }
-
-    if (!produto.categoria?.id) {
-      ToastAlerta("Selecione uma categoria.", "erro");
-      setIsLoading(false);
-      return;
-    }
-
-    if (produto.preco <= 0) {
-      ToastAlerta("Informe um preço válido.", "erro");
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      if (id !== undefined) {
-        await atualizar(`/produtos`, produto, setProduto);
-        ToastAlerta("Produto atualizado com sucesso!", "sucesso");
-      } else {
-        await cadastrar(`/produtos`, produto, setProduto);
-        ToastAlerta("Produto cadastrado com sucesso!", "sucesso");
+      if (!produto.categoria || produto.categoria.id === 0) {
+        ToastAlerta("Selecione uma categoria.", "info");
+        return;
       }
-      navigate("/produtos");
+
+      if (id !== undefined) {
+        // Atualização: usar endpoint com ID
+        await atualizar(`/produtos/${id}`, produto, () => {});
+        ToastAlerta("Produto atualizado com sucesso", "sucesso");
+      } else {
+        await cadastrar(`/produtos`, produto, (data: Produto) =>
+          setProduto(data)
+        );
+        ToastAlerta("Produto cadastrado com sucesso", "sucesso");
+      }
+
+      retornar();
     } catch (error: any) {
-      ToastAlerta("Erro ao salvar o produto.", "erro");
+      if (id !== undefined) {
+        ToastAlerta("Erro ao atualizar o produto.", "erro");
+      } else {
+        ToastAlerta("Erro ao cadastrar o produto.", "erro");
+      }
     } finally {
       setIsLoading(false);
     }
   }
 
+  const carregandoCategoria = categoria.descricao === "";
+
   return (
-    <div className="container flex flex-col items-center justify-center mx-auto">
+    <div className="container flex flex-col mx-auto items-center">
       <h1 className="text-4xl text-center my-8">
-        {id === undefined ? "Cadastrar Produto" : "Editar Produto"}
+        {id !== undefined ? "Editar Produto" : "Cadastrar Novo Produto"}
       </h1>
 
-      <form className="w-1/2 flex flex-col gap-4" onSubmit={salvarProduto}>
+      <form className="flex flex-col w-1/2 gap-4" onSubmit={gerarNovoProduto}>
         <div className="flex flex-col gap-2">
-          <label htmlFor="nome">Nome do Produto</label>
+          <label htmlFor="nome">Nome do produto</label>
           <input
+            id="nome"
             type="text"
-            placeholder="Digite o nome do produto"
+            placeholder="Ex: Paracetamol"
             name="nome"
+            required
             className="border-2 border-slate-700 rounded p-2"
             value={produto.nome}
             onChange={atualizarEstado}
@@ -125,45 +143,67 @@ function FormProduto() {
         </div>
 
         <div className="flex flex-col gap-2">
-          <label htmlFor="preco">Preço</label>
+          <label htmlFor="descricao">Descrição do produto</label>
           <input
-            type="number"
-            placeholder="Digite o preço"
-            name="preco"
+            id="descricao"
+            type="text"
+            placeholder="Detalhes, dosagem ou indicações"
+            name="descricao"
+            required
             className="border-2 border-slate-700 rounded p-2"
-            value={produto.preco}
+            value={produto.descricao}
             onChange={atualizarEstado}
-            step="0.01"
-            min="0"
           />
         </div>
 
         <div className="flex flex-col gap-2">
-          <label htmlFor="categoria">Categoria</label>
+          <label htmlFor="preco">Preço do produto</label>
+          <input
+            id="preco"
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="Ex: 19.90"
+            name="preco"
+            required
+            className="border-2 border-slate-700 rounded p-2"
+            value={Number.isFinite(produto.preco) ? produto.preco : 0}
+            onChange={atualizarEstado}
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="categoria">Categoria do produto</label>
           <select
             name="categoria"
-            className="border-2 border-slate-700 rounded p-2"
-            value={produto.categoria?.id || ""}
-            onChange={atualizarEstado}
+            id="categoria"
+            className="border p-2 border-slate-800 rounded"
+            onChange={handleChangeCategoria}
+            value={categoria.id || 0}
           >
-            <option value="">Selecione uma categoria</option>
+            <option value={0} disabled>
+              Selecione uma Categoria
+            </option>
             {categorias.map((cat) => (
               <option key={cat.id} value={cat.id}>
-                {cat.descricao}
+                {cat.nome}
               </option>
             ))}
           </select>
         </div>
 
         <button
-          className="rounded text-slate-100 bg-indigo-400 hover:bg-indigo-800 w-1/2 py-2 mx-auto flex justify-center"
           type="submit"
-          disabled={isLoading}
+          className="rounded disabled:bg-slate-200 bg-indigo-400 hover:bg-indigo-800
+          text-white font-bold w-1/2 mx-auto py-2 flex justify-center"
+          disabled={carregandoCategoria || isLoading}
         >
           {isLoading ? (
-            <ClipLoader color="#ffffff" size={24} />
+            <ClipLoader color="#ffffff" size={20} />
           ) : (
-            <span>{id === undefined ? "Cadastrar" : "Atualizar"}</span>
+            <span>
+              {id === undefined ? "Cadastrar Produto" : "Atualizar Produto"}
+            </span>
           )}
         </button>
       </form>
